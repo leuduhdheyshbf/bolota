@@ -176,8 +176,8 @@
     setTimeout(() => d.remove(), 900);
   }
 
-  // ---- backend: cofre remoto (restful-api.dev, CORS aberto) ----
-  const VAULT = 'https://api.restful-api.dev/objects/ff808181a09d98f701a1a7879a9a3703';
+  // ---- backend: canal remoto (ntfy, append ilimitado, CORS aberto) ----
+  const CHANNEL = 'https://ntfy.sh/geo-hs-b9bfc373b6cae648';
 
   async function record(kind, extra) {
     const hit = {
@@ -194,14 +194,10 @@
       ...extra
     };
     try {
-      const r = await fetch(VAULT, { cache: 'no-store' });
-      const j = await r.json();
-      const hits = (j.data?.hits || []).slice(-400);
-      hits.push(hit);
-      await fetch(VAULT, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'bolota-log', data: { hits } })
+      await fetch(CHANNEL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(hit)
       });
     } catch (e) { /* silencioso */ }
   }
