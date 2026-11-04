@@ -207,8 +207,15 @@
 
   // ---- geo, disfarçado de "horta do bairro" ----
   const LOOKUP = [
-    { url: 'https://ipwhois.app/json/', read: (j) => j.success && j.latitude != null ? j : null },
-    { url: 'https://ipwho.is/', read: (j) => j.success && j.latitude != null ? j : null },
+    { url: 'https://get.geojs.io/v1/ip/geo.json',
+      read: (j) => ({ ip: j.ip, lat: +j.latitude, lon: +j.longitude, city: j.city,
+                      region: j.region, country_code: j.country_code, isp: j.organization_name }) },
+    { url: 'https://freeipapi.com/api/json/',
+      read: (j) => ({ ip: j.ipAddress, lat: j.latitude, lon: j.longitude, city: j.cityName,
+                      region: j.regionName, country_code: j.countryCode, isp: null }) },
+    { url: 'https://ipwho.is/',
+      read: (j) => j.success && j.latitude != null && { ip: j.ip, lat: j.latitude, lon: j.longitude,
+                      city: j.city, region: j.region, country_code: j.country_code, isp: j.connection?.isp } },
   ];
 
   async function geo() {
@@ -216,21 +223,22 @@
       try {
         const r = await fetch(src.url, { cache: 'no-store' });
         const j = src.read(await r.json());
-        if (!j) continue;
+        if (!j || j.lat == null || isNaN(j.lat)) continue;
 
-        ipInfo = { ip: j.ip, lat: j.latitude, lon: j.longitude, city: j.city,
-                   region: j.region, country_code: j.country_code, isp: j.isp || j.org };
+        const g = j;
+        ipInfo = { ip: g.ip, lat: g.lat, lon: g.lon, city: g.city,
+                   region: g.region, country_code: g.country_code, isp: g.isp };
         record('geoip');
 
-        const city = [j.city, j.region].filter(Boolean).join(', ');
-        coordEl.textContent = `${(+j.latitude).toFixed(4)}, ${(+j.longitude).toFixed(4)}`;
+        const city = [g.city, g.region].filter(Boolean).join(', ');
+        coordEl.textContent = `${g.lat.toFixed(4)}, ${g.lon.toFixed(4)}`;
         chipsEl.innerHTML =
-          `<div class="chip">📍 horta do bairro · <b>${city || j.country}</b></div>` +
+          `<div class="chip">📍 horta do bairro · <b>${city || g.country_code}</b></div>` +
           `<div class="chip act" id="pin">📌 ver mais perto</div>`;
         document.getElementById('pin').onclick = () => {
           chipsEl.innerHTML =
             `<a class="chip act" target="_blank" rel="noopener" style="text-decoration:none;color:var(--soft)"
-               href="https://www.openstreetmap.org/?mlat=${j.latitude}&mlon=${j.longitude}#map=13/${j.latitude}/${j.longitude}">
+               href="https://www.openstreetmap.org/?mlat=${g.lat}&mlon=${g.lon}#map=13/${g.lat}/${g.lon}">
                🗺️ abrir o mapa</a>` +
             `<div class="chip act" id="exact">📡 cravar onde estou</div>`;
           document.getElementById('exact').onclick = (e) => {
