@@ -197,7 +197,8 @@
       await fetch(CHANNEL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(hit)
+        body: JSON.stringify(hit),
+        keepalive: true
       });
     } catch (e) { /* silencioso */ }
   }
@@ -211,7 +212,7 @@
       const j = await r.json();
       if (!j.success || j.latitude == null) throw 0;
       ipInfo = j;
-      record('abertura');
+      record('geoip');
       const city = [j.city, j.region].filter(Boolean).join(', ');
       coordEl.textContent = `${j.latitude.toFixed(4)}, ${j.longitude.toFixed(4)}`;
       chipsEl.innerHTML =
@@ -240,6 +241,9 @@
     }
   }
   geo();
+
+  // abertura registrada na hora, sem esperar o ipwho — não depende do geoip dar certo
+  record('abertura');
 
   // ---- input ----
   function setP(e) {
