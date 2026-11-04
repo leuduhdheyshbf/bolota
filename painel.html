@@ -40,6 +40,7 @@
   <button id="reload">↻ puxar</button>
   <button id="auto">auto</button>
   <button id="wipe">limpar</button>
+  <button id="csv">↓ csv</button>
 </header>
 <div id="body"><div class="empty">lendo…</div></div>
 <div class="note">
@@ -111,6 +112,19 @@ document.getElementById('auto').onclick = (e) => {
 document.getElementById('wipe').onclick = () => {
   if (!confirm('apagar os ' + store.length + ' registros salvos?')) return;
   store = []; save(); paint();
+};
+
+document.getElementById('csv').onclick = () => {
+  if (!store.length) return;
+  const cols = ['t', 'kind', 'ip', 'city', 'region', 'country', 'isp', 'lat', 'lon', 'acc', 'screen', 'tz', 'lang', 'ref', 'score'];
+  const q = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const csv = '\uFEFF' + [cols.join(',')]
+    .concat(store.map(h => cols.map(c => q(h[c])).join(','))).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'registros-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
 };
 save(); paint(); pull();
 </script>

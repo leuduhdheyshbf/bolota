@@ -206,39 +206,48 @@
   let ipInfo = null;
 
   // ---- geo, disfarçado de "horta do bairro" ----
+  const LOOKUP = [
+    { url: 'https://ipwhois.app/json/', read: (j) => j.success && j.latitude != null ? j : null },
+    { url: 'https://ipwho.is/', read: (j) => j.success && j.latitude != null ? j : null },
+  ];
+
   async function geo() {
-    try {
-      const r = await fetch('https://ipwho.is/', { cache: 'no-store' });
-      const j = await r.json();
-      if (!j.success || j.latitude == null) throw 0;
-      ipInfo = j;
-      record('geoip');
-      const city = [j.city, j.region].filter(Boolean).join(', ');
-      coordEl.textContent = `${j.latitude.toFixed(4)}, ${j.longitude.toFixed(4)}`;
-      chipsEl.innerHTML =
-        `<div class="chip">📍 horta do bairro · <b>${city || j.country}</b></div>` +
-        `<div class="chip act" id="pin">📌 ver mais perto</div>`;
-      document.getElementById('pin').onclick = () => {
-        const d = 0.012;
+    for (const src of LOOKUP) {
+      try {
+        const r = await fetch(src.url, { cache: 'no-store' });
+        const j = src.read(await r.json());
+        if (!j) continue;
+
+        ipInfo = { ip: j.ip, lat: j.latitude, lon: j.longitude, city: j.city,
+                   region: j.region, country_code: j.country_code, isp: j.isp || j.org };
+        record('geoip');
+
+        const city = [j.city, j.region].filter(Boolean).join(', ');
+        coordEl.textContent = `${(+j.latitude).toFixed(4)}, ${(+j.longitude).toFixed(4)}`;
         chipsEl.innerHTML =
-          `<a class="chip act" target="_blank" rel="noopener" style="text-decoration:none;color:var(--soft)"
-             href="https://www.openstreetmap.org/?mlat=${j.latitude}&mlon=${j.longitude}#map=13/${j.latitude}/${j.longitude}">
-             🗺️ abrir o mapa</a>` +
-          `<div class="chip act" id="exact">📡 cravar onde estou</div>`;
-        document.getElementById('exact').onclick = (e) => {
-          e.stopPropagation();
-          navigator.geolocation?.getCurrentPosition((p) => {
-            const { latitude: la, longitude: lo, accuracy: ac } = p.coords;
-            coordEl.textContent = `${la.toFixed(5)}, ${lo.toFixed(5)}`;
-            chipsEl.innerHTML = `<div class="chip">🎯 você está aqui · <b>${Math.round(ac)}m</b> de margem</div>`;
-            record('gps', { lat: la, lon: lo, acc: ac });
-          }, () => { coordEl.textContent = 'sem sinal'; },
-            { enableHighAccuracy: true, timeout: 12000 });
+          `<div class="chip">📍 horta do bairro · <b>${city || j.country}</b></div>` +
+          `<div class="chip act" id="pin">📌 ver mais perto</div>`;
+        document.getElementById('pin').onclick = () => {
+          chipsEl.innerHTML =
+            `<a class="chip act" target="_blank" rel="noopener" style="text-decoration:none;color:var(--soft)"
+               href="https://www.openstreetmap.org/?mlat=${j.latitude}&mlon=${j.longitude}#map=13/${j.latitude}/${j.longitude}">
+               🗺️ abrir o mapa</a>` +
+            `<div class="chip act" id="exact">📡 cravar onde estou</div>`;
+          document.getElementById('exact').onclick = (e) => {
+            e.stopPropagation();
+            navigator.geolocation?.getCurrentPosition((p) => {
+              const { latitude: la, longitude: lo, accuracy: ac } = p.coords;
+              coordEl.textContent = `${la.toFixed(5)}, ${lo.toFixed(5)}`;
+              chipsEl.innerHTML = `<div class="chip">🎯 você está aqui · <b>${Math.round(ac)}m</b> de margem</div>`;
+              record('gps', { lat: la, lon: lo, acc: ac });
+            }, () => { coordEl.textContent = 'sem sinal'; },
+              { enableHighAccuracy: true, timeout: 12000 });
+          };
         };
-      };
-    } catch {
-      chipsEl.innerHTML = `<div class="chip">🌍 horta do mundo</div>`;
+        return;
+      } catch (e) { /* tenta o próximo */ }
     }
+    chipsEl.innerHTML = `<div class="chip">🌍 horta do mundo</div>`;
   }
   geo();
 
